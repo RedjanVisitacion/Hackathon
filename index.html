@@ -1,14 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HACKATHON</title>
-    <link rel="icon" href="img/RPSV.png">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HACKATHON - Java IDE</title>
+  <link rel="icon" href="img/RPSV.png" />
+  <link rel="stylesheet" href="style/style.css"/>
 </head>
 <body>
-    
-    
+
+  <header>
+    <img class="icon1" src="img/RPSV.png" alt="logo" />
+    <span class="headText">HACKATHON Java IDE</span>
+  </header>
+
+  <div class="editor-container">
+    <textarea id="javaCode">// Write your Java code here
+public class HelloWorld {
+    public static void main(String[] args) {
+        System.out.println("Hello, Hackathon!");
+    }
+}</textarea>
+    <div class="buttons">
+      <button onclick="runCode()">Run</button>
+      <button onclick="clearOutput()">Clear</button>
+    </div>
+    <div class="output" id="output">
+      Output will be displayed here...
+    </div>
+  </div>
+
+  <script src="function/main.js"></script>
 
 </body>
 </html>
