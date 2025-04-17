@@ -9,16 +9,12 @@ function runCode() {
     const hasPrint = /System\.out\.println\s*\(.*\);/.test(code);
     const missingSemicolon = /System\.out\.println\s*\(.*\)(?!;)/.test(code);
   
-    // Simulate execution
     const simulateExecution = () => {
       let simulatedOutput = '';
   
-      // Simulate basic System.out.println()
       const allPrints = [...code.matchAll(/System\.out\.println\s*\((.*?)\);/g)];
       allPrints.forEach(match => {
         let content = match[1].trim();
-  
-        // Remove quotes and handle basic variable/concat (fake simulate)
         if (content.startsWith('"') && content.endsWith('"')) {
           simulatedOutput += content.slice(1, -1) + '\n';
         } else if (content.includes('+')) {
@@ -30,13 +26,12 @@ function runCode() {
         }
       });
   
-      // Simulate basic for loop output (assume 3 loops for demo)
       const forLoops = [...code.matchAll(/for\s*\((.*?)\)\s*\{([\s\S]*?)\}/g)];
       forLoops.forEach(loop => {
         const body = loop[2];
   
         const printsInLoop = [...body.matchAll(/System\.out\.println\s*\((.*?)\);/g)];
-        for (let i = 0; i < 3; i++) {  // simulate 3 iterations
+        for (let i = 0; i < 3; i++) {
           printsInLoop.forEach(match => {
             let content = match[1].trim();
             if (content.includes('+')) {
@@ -53,7 +48,6 @@ function runCode() {
       return simulatedOutput;
     };
   
-    // Simulate compile & execution
     setTimeout(() => {
       if (hasClass && hasMain && hasPrint && !missingSemicolon) {
         const finalOutput = simulateExecution();
