@@ -4,6 +4,7 @@ function runCode() {
     output.textContent = 'Compiling...\n';
 
     const variables = {};
+    const arrays = {};
     const lines = code.split('\n').map(line => line.trim());
 
     const hasClass = /class\s+\w+/.test(code);
@@ -11,138 +12,118 @@ function runCode() {
     const hasPrint = /System\.out\.(print|println)\s*\(.*\);/.test(code);
     const missingSemicolon = /System\.out\.(print|println)\s*\(.*\)(?!;)/.test(code);
 
+    const safeEval = (expression) => {
+        try {
+            const replaced = expression.replace(/\b\w+\b/g, v => {
+                if (variables[v] !== undefined) return variables[v];
+                return v;
+            });
+            return eval(replaced);
+        } catch {
+            return '[undefined]';
+        }
+    };
+
+    const resolvePrintContent = (content) => {
+        const arrayAccessMatch = content.match(/(\w+)\[(.*?)\]/);
+        if (arrayAccessMatch) {
+            const [, arrayName, indexExpr] = arrayAccessMatch;
+            const index = safeEval(indexExpr);
+            return arrays[arrayName]?.[index] ?? '[undefined]';
+        } else if (content.startsWith('"') && content.endsWith('"')) {
+            return content.slice(1, -1);
+        } else if (content.includes('+')) {
+            return content.split('+').map(part => {
+                part = part.trim();
+                if (part.startsWith('"') && part.endsWith('"')) {
+                    return part.slice(1, -1);
+                } else {
+                    return variables[part] !== undefined ? variables[part] : '[undefined]';
+                }
+            }).join('');
+        } else {
+            return variables[content] ?? '[undefined]';
+        }
+    };
+
     const simulateExecution = () => {
         let outputBuffer = '';
         let i = 0;
 
         while (i < lines.length) {
-            let line = lines[i];
+            const line = lines[i];
 
-            // Variable Declaration
+            // Handle Array Declaration
+            const arrayMatch = line.match(/String\[\]\s+(\w+)\s*=\s*\{(.*)\};/);
+            if (arrayMatch) {
+                const [, name, values] = arrayMatch;
+                arrays[name] = values.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                i++;
+                continue;
+            }
+
+            // Handle Variable Declaration
             const varMatch = line.match(/(int|boolean|String)\s+(\w+)\s*=\s*(.*);/);
             if (varMatch) {
-                let [, type, name, value] = varMatch;
-                value = value.trim();
-
-                try {
-                    if (type === 'int') {
-                        const replaced = value.replace(/\b\w+\b/g, v => variables[v] !== undefined ? variables[v] : v);
-                        variables[name] = eval(replaced);
-                    } else if (type === 'boolean') {
-                        variables[name] = value === 'true';
-                    } else if (type === 'String') {
-                        const strMatch = value.match(/^"(.*)"$/);
-                        variables[name] = strMatch ? strMatch[1] : value;
-                    }
-                } catch (e) {
-                    variables[name] = NaN;
+                const [, type, name, valueRaw] = varMatch;
+                let value = valueRaw.trim();
+                if (type === 'int') {
+                    variables[name] = safeEval(value);
+                } else if (type === 'boolean') {
+                    variables[name] = value === 'true';
+                } else if (type === 'String') {
+                    const match = value.match(/^"(.*)"$/);
+                    variables[name] = match ? match[1] : value;
                 }
                 i++;
                 continue;
             }
 
-            // If Statement
-            const ifMatch = line.match(/if\s*\((.+)\)/);
-            if (ifMatch) {
-                let condition = ifMatch[1].trim();
-                let conditionValue = false;
-                try {
-                    const replaced = condition.replace(/\b\w+\b/g, v => variables[v] !== undefined ? JSON.stringify(variables[v]) : v);
-                    conditionValue = eval(replaced);
-                } catch (e) {
-                    outputBuffer += '[Error] Invalid condition in if-statement\n';
-                }
-
-                if (!conditionValue) {
-                    if (lines[i + 1]?.includes('{')) {
-                        i++;
-                        while (!lines[i]?.includes('}')) i++;
-                    } else {
-                        i++;
-                    }
-                }
-                i++;
-                continue;
-            }
-
-            // For Loop (correct handling for iteration)
-            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(-?\d+);\s*\1\s*([<>]=?)\s*(-?\d+);\s*\1(\+\+|--)+\)/);
+            // Handle For Loop
+            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(-?\d+);\s*\1\s*([<>]=?)\s*(-?\d+);\s*\1(\+\+|--)\)/);
             if (forMatch) {
-                let [, loopVar, start, operator, end, step] = forMatch;
-                start = parseInt(start);
-                end = parseInt(end);
+                const [, loopVar, startStr, operator, endStr, step] = forMatch;
+                const start = parseInt(startStr);
+                const end = parseInt(endStr);
                 const isIncrement = step === '++';
-                const comparator = {
+                const compare = {
                     '<': (a, b) => a < b,
                     '<=': (a, b) => a <= b,
                     '>': (a, b) => a > b,
                     '>=': (a, b) => a >= b
                 }[operator];
 
-                let loopBody = [];
                 i++;
+                const loopBody = [];
                 if (lines[i] === '{') i++;
-                while (lines[i] !== '}') {
+                while (lines[i] !== '}' && i < lines.length) {
                     loopBody.push(lines[i]);
                     i++;
                 }
+                if (lines[i] === '}') i++;
 
-                for (let j = start; comparator(j, end); isIncrement ? j++ : j--) {
+                for (let j = start; compare(j, end); isIncrement ? j++ : j--) {
                     variables[loopVar] = j;
-                    loopBody.forEach(bodyLine => {
+                    for (const bodyLine of loopBody) {
                         const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
                         if (printMatch) {
-                            const [, type, rawContent] = printMatch;
-                            const content = rawContent.trim();
-                            let outputPart = '';
-
-                            if (content.startsWith('"') && content.endsWith('"')) {
-                                outputPart = content.slice(1, -1);
-                            } else if (content.includes('+')) {
-                                const parts = content.split('+').map(p => p.trim());
-                                outputPart = parts.map(part => {
-                                    if (part.startsWith('"') && part.endsWith('"')) {
-                                        return part.slice(1, -1);
-                                    } else {
-                                        return variables[part] !== undefined ? variables[part] : '[undefined]';
-                                    }
-                                }).join(' ');
-                            } else {
-                                outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
-                            }
-
+                            const [, type, contentRaw] = printMatch;
+                            const content = contentRaw.trim();
+                            const outputPart = resolvePrintContent(content);
                             outputBuffer += outputPart;
                             if (type === 'println') outputBuffer += '\n';
                         }
-                    });
+                    }
                 }
-
-                i++; // skip closing brace
                 continue;
             }
 
-            // Print / Println outside loop
+            // Handle Print Statements outside loop
             const printMatch = line.match(/System\.out\.(print|println)\s*\((.*?)\);/);
             if (printMatch) {
-                const [, type, rawContent] = printMatch;
-                const content = rawContent.trim();
-                let outputPart = '';
-
-                if (content.startsWith('"') && content.endsWith('"')) {
-                    outputPart = content.slice(1, -1);
-                } else if (content.includes('+')) {
-                    const parts = content.split('+').map(p => p.trim());
-                    outputPart = parts.map(part => {
-                        if (part.startsWith('"') && part.endsWith('"')) {
-                            return part.slice(1, -1);
-                        } else {
-                            return variables[part] !== undefined ? variables[part] : '[undefined]';
-                        }
-                    }).join(' ');
-                } else {
-                    outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
-                }
-
+                const [, type, contentRaw] = printMatch;
+                const content = contentRaw.trim();
+                const outputPart = resolvePrintContent(content);
                 outputBuffer += outputPart;
                 if (type === 'println') outputBuffer += '\n';
             }
@@ -156,12 +137,12 @@ function runCode() {
     setTimeout(() => {
         if (hasClass && hasMain && hasPrint && !missingSemicolon) {
             const finalOutput = simulateExecution();
-            output.textContent += `\n${finalOutput}\nProgram finished with exit code 0.`;
+            output.textContent = `\n${finalOutput}\nProgram finished with exit code 0.`;
         } else {
-            output.textContent += '\n[Error] Compilation failed:\n';
+            output.textContent = '\n[Error] Compilation failed:\n';
             if (!hasClass) output.textContent += '- ❌ Missing class definition\n';
             if (!hasMain) output.textContent += '- ❌ Missing main method\n';
-            if (!hasPrint) output.textContent += '- ❌ Missing or incorrect System.out.print/println(...);\n';
+            if (!hasPrint) output.textContent += '- ❌ Missing or incorrect System.out.print/println(...)\n';
             if (missingSemicolon) output.textContent += '- ❌ Missing semicolon at end of print statement\n';
         }
     }, 1000);
