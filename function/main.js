@@ -65,12 +65,19 @@ function runCode() {
                 continue;
             }
 
-            // For Loop (basic form)
-            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(-?\d+);\s*\1\s*<\s*(-?\d+);\s*\1\+\+\)/);
+            // For Loop (correct handling for iteration)
+            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(-?\d+);\s*\1\s*([<>]=?)\s*(-?\d+);\s*\1(\+\+|--)+\)/);
             if (forMatch) {
-                let [, loopVar, start, end] = forMatch;
+                let [, loopVar, start, operator, end, step] = forMatch;
                 start = parseInt(start);
                 end = parseInt(end);
+                const isIncrement = step === '++';
+                const comparator = {
+                    '<': (a, b) => a < b,
+                    '<=': (a, b) => a <= b,
+                    '>': (a, b) => a > b,
+                    '>=': (a, b) => a >= b
+                }[operator];
 
                 let loopBody = [];
                 i++;
@@ -80,7 +87,7 @@ function runCode() {
                     i++;
                 }
 
-                for (let j = start; j < end; j++) {
+                for (let j = start; comparator(j, end); isIncrement ? j++ : j--) {
                     variables[loopVar] = j;
                     loopBody.forEach(bodyLine => {
                         const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
@@ -99,7 +106,7 @@ function runCode() {
                                     } else {
                                         return variables[part] !== undefined ? variables[part] : '[undefined]';
                                     }
-                                }).join('');
+                                }).join(' ');
                             } else {
                                 outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
                             }
@@ -131,7 +138,7 @@ function runCode() {
                         } else {
                             return variables[part] !== undefined ? variables[part] : '[undefined]';
                         }
-                    }).join('');
+                    }).join(' ');
                 } else {
                     outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
                 }
