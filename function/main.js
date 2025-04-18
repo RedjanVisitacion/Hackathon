@@ -24,13 +24,18 @@ function runCode() {
                 let [, type, name, value] = varMatch;
                 value = value.trim();
 
-                if (type === 'int') {
-                    variables[name] = parseInt(value);
-                } else if (type === 'boolean') {
-                    variables[name] = value === 'true';
-                } else if (type === 'String') {
-                    const strMatch = value.match(/^"(.*)"$/);
-                    variables[name] = strMatch ? strMatch[1] : value;
+                try {
+                    if (type === 'int') {
+                        const replaced = value.replace(/\b\w+\b/g, v => variables[v] !== undefined ? variables[v] : v);
+                        variables[name] = eval(replaced);
+                    } else if (type === 'boolean') {
+                        variables[name] = value === 'true';
+                    } else if (type === 'String') {
+                        const strMatch = value.match(/^"(.*)"$/);
+                        variables[name] = strMatch ? strMatch[1] : value;
+                    }
+                } catch (e) {
+                    variables[name] = NaN;
                 }
                 i++;
                 continue;
@@ -42,9 +47,7 @@ function runCode() {
                 let condition = ifMatch[1].trim();
                 let conditionValue = false;
                 try {
-                    const replaced = condition.replace(/\b\w+\b/g, v =>
-                        variables[v] !== undefined ? JSON.stringify(variables[v]) : v
-                    );
+                    const replaced = condition.replace(/\b\w+\b/g, v => variables[v] !== undefined ? JSON.stringify(variables[v]) : v);
                     conditionValue = eval(replaced);
                 } catch (e) {
                     outputBuffer += '[Error] Invalid condition in if-statement\n';
@@ -77,36 +80,34 @@ function runCode() {
                     i++;
                 }
 
-                if (start < end) {
-                    for (let j = start; j < end; j++) {
-                        variables[loopVar] = j;
-                        loopBody.forEach(bodyLine => {
-                            const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
-                            if (printMatch) {
-                                const [, type, rawContent] = printMatch;
-                                const content = rawContent.trim();
-                                let outputPart = '';
+                for (let j = start; j < end; j++) {
+                    variables[loopVar] = j;
+                    loopBody.forEach(bodyLine => {
+                        const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
+                        if (printMatch) {
+                            const [, type, rawContent] = printMatch;
+                            const content = rawContent.trim();
+                            let outputPart = '';
 
-                                if (content.startsWith('"') && content.endsWith('"')) {
-                                    outputPart = content.slice(1, -1);
-                                } else if (content.includes('+')) {
-                                    const parts = content.split('+').map(p => p.trim());
-                                    outputPart = parts.map(part => {
-                                        if (part.startsWith('"') && part.endsWith('"')) {
-                                            return part.slice(1, -1);
-                                        } else {
-                                            return variables[part] !== undefined ? variables[part] : '[undefined]';
-                                        }
-                                    }).join('');
-                                } else {
-                                    outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
-                                }
-
-                                outputBuffer += outputPart;
-                                if (type === 'println') outputBuffer += '\n';
+                            if (content.startsWith('"') && content.endsWith('"')) {
+                                outputPart = content.slice(1, -1);
+                            } else if (content.includes('+')) {
+                                const parts = content.split('+').map(p => p.trim());
+                                outputPart = parts.map(part => {
+                                    if (part.startsWith('"') && part.endsWith('"')) {
+                                        return part.slice(1, -1);
+                                    } else {
+                                        return variables[part] !== undefined ? variables[part] : '[undefined]';
+                                    }
+                                }).join('');
+                            } else {
+                                outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
                             }
-                        });
-                    }
+
+                            outputBuffer += outputPart;
+                            if (type === 'println') outputBuffer += '\n';
+                        }
+                    });
                 }
 
                 i++; // skip closing brace
@@ -114,31 +115,29 @@ function runCode() {
             }
 
             // Print / Println outside loop
-            if (line.startsWith('System.out.print')) {
-                const printMatch = line.match(/System\.out\.(print|println)\s*\((.*?)\);/);
-                if (printMatch) {
-                    const [, type, rawContent] = printMatch;
-                    const content = rawContent.trim();
-                    let outputPart = '';
+            const printMatch = line.match(/System\.out\.(print|println)\s*\((.*?)\);/);
+            if (printMatch) {
+                const [, type, rawContent] = printMatch;
+                const content = rawContent.trim();
+                let outputPart = '';
 
-                    if (content.startsWith('"') && content.endsWith('"')) {
-                        outputPart = content.slice(1, -1);
-                    } else if (content.includes('+')) {
-                        const parts = content.split('+').map(p => p.trim());
-                        outputPart = parts.map(part => {
-                            if (part.startsWith('"') && part.endsWith('"')) {
-                                return part.slice(1, -1);
-                            } else {
-                                return variables[part] !== undefined ? variables[part] : '[undefined]';
-                            }
-                        }).join('');
-                    } else {
-                        outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
-                    }
-
-                    outputBuffer += outputPart;
-                    if (type === 'println') outputBuffer += '\n';
+                if (content.startsWith('"') && content.endsWith('"')) {
+                    outputPart = content.slice(1, -1);
+                } else if (content.includes('+')) {
+                    const parts = content.split('+').map(p => p.trim());
+                    outputPart = parts.map(part => {
+                        if (part.startsWith('"') && part.endsWith('"')) {
+                            return part.slice(1, -1);
+                        } else {
+                            return variables[part] !== undefined ? variables[part] : '[undefined]';
+                        }
+                    }).join('');
+                } else {
+                    outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
                 }
+
+                outputBuffer += outputPart;
+                if (type === 'println') outputBuffer += '\n';
             }
 
             i++;
