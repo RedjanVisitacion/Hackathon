@@ -13,12 +13,12 @@ function runCode() {
 
     const simulateExecution = () => {
         let outputBuffer = '';
-
         let i = 0;
+
         while (i < lines.length) {
             let line = lines[i];
 
-            // Variable declaration
+            // Variable Declaration
             const varMatch = line.match(/(int|boolean|String)\s+(\w+)\s*=\s*(.*);/);
             if (varMatch) {
                 let [, type, name, value] = varMatch;
@@ -36,7 +36,7 @@ function runCode() {
                 continue;
             }
 
-            // If statement
+            // If Statement
             const ifMatch = line.match(/if\s*\((.+)\)/);
             if (ifMatch) {
                 let condition = ifMatch[1].trim();
@@ -62,54 +62,58 @@ function runCode() {
                 continue;
             }
 
-            // For loop (without iteration function)
-            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(\d+);\s*\1\s*<\s*(\d+);\s*\1\+\+\)/);
+            // For Loop (basic form)
+            const forMatch = line.match(/for\s*\(int\s+(\w+)\s*=\s*(-?\d+);\s*\1\s*<\s*(-?\d+);\s*\1\+\+\)/);
             if (forMatch) {
                 let [, loopVar, start, end] = forMatch;
+                start = parseInt(start);
+                end = parseInt(end);
+
                 let loopBody = [];
                 i++;
-                if (lines[i] === '{') i++; // skip opening brace
+                if (lines[i] === '{') i++;
                 while (lines[i] !== '}') {
                     loopBody.push(lines[i]);
                     i++;
                 }
 
-                // Directly process the loop range
-                for (let j = parseInt(start); j < parseInt(end); j++) {
-                    variables[loopVar] = j;
-                    loopBody.forEach(bodyLine => {
-                        // Process each line inside the loop
-                        const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
-                        if (printMatch) {
-                            const [, type, rawContent] = printMatch;
-                            const content = rawContent.trim();
-                            let outputPart = '';
+                if (start < end) {
+                    for (let j = start; j < end; j++) {
+                        variables[loopVar] = j;
+                        loopBody.forEach(bodyLine => {
+                            const printMatch = bodyLine.match(/System\.out\.(print|println)\s*\((.*?)\);/);
+                            if (printMatch) {
+                                const [, type, rawContent] = printMatch;
+                                const content = rawContent.trim();
+                                let outputPart = '';
 
-                            if (content.startsWith('"') && content.endsWith('"')) {
-                                outputPart = content.slice(1, -1);
-                            } else if (content.includes('+')) {
-                                const parts = content.split('+').map(p => p.trim());
-                                outputPart = parts.map(part => {
-                                    if (part.startsWith('"') && part.endsWith('"')) {
-                                        return part.slice(1, -1);
-                                    } else {
-                                        return variables[part] !== undefined ? variables[part] : '[undefined]';
-                                    }
-                                }).join('');
-                            } else {
-                                outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
+                                if (content.startsWith('"') && content.endsWith('"')) {
+                                    outputPart = content.slice(1, -1);
+                                } else if (content.includes('+')) {
+                                    const parts = content.split('+').map(p => p.trim());
+                                    outputPart = parts.map(part => {
+                                        if (part.startsWith('"') && part.endsWith('"')) {
+                                            return part.slice(1, -1);
+                                        } else {
+                                            return variables[part] !== undefined ? variables[part] : '[undefined]';
+                                        }
+                                    }).join('');
+                                } else {
+                                    outputPart = variables[content] !== undefined ? variables[content] : '[undefined]';
+                                }
+
+                                outputBuffer += outputPart;
+                                if (type === 'println') outputBuffer += '\n';
                             }
-
-                            outputBuffer += outputPart;
-                            if (type === 'println') outputBuffer += '\n';
-                        }
-                    });
+                        });
+                    }
                 }
+
                 i++; // skip closing brace
                 continue;
             }
 
-            // Process print/println outside of the loop
+            // Print / Println outside loop
             if (line.startsWith('System.out.print')) {
                 const printMatch = line.match(/System\.out\.(print|println)\s*\((.*?)\);/);
                 if (printMatch) {
